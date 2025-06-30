@@ -41,7 +41,13 @@ def add_session_to_history(session):
     """
     Add a conversation (list of message dicts) to history if it's not a duplicate of the last one.
     Each session is a list of dicts: {"role": ..., "content": ...}
+    Only saves legitimate conversations with proper format.
     """
+    # Validate that this is a legitimate session
+    if not is_legitimate_session(session):
+        print("Warning: Skipping invalid session format")
+        return
+    
     history = load_chat_history()
     # Only save if different from the last saved conversation
     if not history or history[-1] != session:
@@ -49,6 +55,21 @@ def add_session_to_history(session):
         # Keep only the last 10 sessions
         history = history[-10:]
         save_chat_history(history)
+
+def is_legitimate_session(session):
+    """
+    Check if a session has the legitimate format (list of dicts with role/content).
+    """
+    if not isinstance(session, list) or len(session) == 0:
+        return False
+    
+    for message in session:
+        if not isinstance(message, dict) or 'role' not in message or 'content' not in message:
+            return False
+        if message['role'] not in ['user', 'assistant']:
+            return False
+    
+    return True
 
 def get_last_n_sessions(n=10):
     history = load_chat_history()
@@ -340,12 +361,7 @@ class SQLGenerator:
                 "explanation": "Error parsing explanation. Raw response returned.",
                 "is_modification": False
             }
-        # Save the session automatically
-        session = []
-        if conversation_history:
-            session.extend(conversation_history)
-        session.append((user_prompt, parsed_result))
-        add_session_to_history(session)
+        # Note: Session saving is now handled by the calling application (e.g., streamlit)
         return parsed_result
 
     def clean_sql_response(self, response):
@@ -456,18 +472,12 @@ class SQLGenerator:
             )
         # Clean up the response and return just the SQL query string
         cleaned = self.clean_sql_response(result)
-        # Save the session automatically
-        session = []
-        if conversation_history:
-            session.extend(conversation_history)
-        session.append((user_prompt, cleaned))
-        add_session_to_history(session)
+        # Note: Session saving is now handled by the calling application (e.g., streamlit)
         return cleaned
 
 def main():
     """Main function to test the SQL Generator."""
-    # api_key = os.getenv("OPENAI_API_KEY")
-    api_key = st.secrets['OPENAI_API_KEY']
+    api_key = os.getenv("OPENAI_API_KEY")
     print(f"API key from environment: {'Found' if api_key else 'Not found'}")
     
     if not api_key:

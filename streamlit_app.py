@@ -21,6 +21,9 @@ if "messages" not in st.session_state:
 if "sql_generator" not in st.session_state:
     st.session_state.sql_generator = None
 
+if "conversation_saved" not in st.session_state:
+    st.session_state.conversation_saved = False
+
 def initialize_sql_generator(api_key):
     """Initialize the SQL generator with the provided API key."""
     try:
@@ -54,6 +57,11 @@ def display_sql_response(response):
 def main():
     st.title("🤖 CeDeFi SQL Assistant")
     st.markdown("Chat with AI to generate and refine SQL queries iteratively!")
+    
+    # Auto-save any existing conversation when the app loads
+    if st.session_state.messages and len(st.session_state.messages) >= 2 and not st.session_state.conversation_saved:
+        add_session_to_history(st.session_state.messages)
+        st.session_state.conversation_saved = True
     
     tab = "Chat"  # Only keep the chat tab, remove history tab
     
@@ -96,10 +104,13 @@ def main():
         else:
             st.error("Please replace 'your_api_key_here' with your actual OpenAI API key")
         
-        # Only keep the clear conversation button
+        # Conversation management
         st.header("🗑️ Conversation")
-        if st.button("Clear Conversation"):
+        
+        # Clear conversation
+        if st.button("🗑️ Clear Conversation", type="secondary"):
             st.session_state.messages = []
+            st.session_state.conversation_saved = False
             st.rerun()
         # Add history button and dropdown
         st.header("🕑 History")
@@ -167,13 +178,23 @@ def main():
                     )
                     # Add AI response to chat history
                     st.session_state.messages.append({"role": "assistant", "content": response})
-                    # Save the entire conversation as one history entry
-                    add_session_to_history(st.session_state.messages)
+                    
+                    # Auto-save conversation after each complete exchange (2 messages: user + assistant)
+                    if len(st.session_state.messages) >= 2 and not st.session_state.conversation_saved:
+                        add_session_to_history(st.session_state.messages)
+                        st.session_state.conversation_saved = True
+                    
                     # Display the response
                     display_sql_response(response)
                 except Exception as e:
                     error_message = f"Error generating SQL query: {str(e)}"
                     st.session_state.messages.append({"role": "assistant", "content": error_message})
+                    
+                    # Auto-save conversation even if there's an error
+                    if len(st.session_state.messages) >= 2 and not st.session_state.conversation_saved:
+                        add_session_to_history(st.session_state.messages)
+                        st.session_state.conversation_saved = True
+                    
                     display_message(error_message, is_user=False)
         # Instructions and examples
         if not st.session_state.messages:
