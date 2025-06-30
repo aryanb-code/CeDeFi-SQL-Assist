@@ -1,0 +1,975 @@
+
+/* General instructions:
+1.It is not allowed to use window functions inside WHERE clause.
+
+*/
+
+
+/*==== QUERY: Recent Customer Signups ====*/
+/* PURPOSE:
+This is the query to get the order level data for all the success full orders placed on the cedefi section of web3 section.
+*/
+
+/* TABLES_AND_COLUMNS:
+- 'prod_okto_gold_catalog.transactions.fact_orders_master' is the table name
+
+,order_id: is the primary key and the unique identifies for the table
+,user_id: is the user_id for users who have placed an order
+,network_id: is the id of the network of chain on which the transaction was made 
+,order type: is the type of the order which can hold the values from [SWAP, DEFI_TO_CEFI, BRIDGE, EXT_TO_DEFI, UNKNOWN_WITHDRAWAL, INLINE_SWAP, INR_TO_CRYPTO, CEFI_TO_DEFI, AIRDROP, INR_TO_CRYPTO_SWAP, NFT_OG_MINT]
+,order_created_date: is the date on which the order was placed
+,created_at: is the IST timestamp of the order placed
+,status: is the status of order which can be either "SUCCESS" or "FAILED"
+,tokens: is the pair of tokens in which the swap have happened it is represented in the format of "A --> B", which means that A token was sold to get B token please not that when order_type is 'INR_TO_CRYPTO_SWAP' then tokens column have null values
+,volume_usdt: is the usd value of the order
+,total_gas_fees_usdt: is the total gas fees incurred in the web3 transaction
+network_name: in the name of network or chain on which the transaction happened
+,input_tokens_id: is the token_id of the tokens which was sold in the trade for the swap,
+,output_tokens_id: is the token_id of the token which was received is the trade for the swap,
+,order_week: is the week in which the trade happened, it is the date of the monday of the week and monday is considered as the first date of the week
+*/
+
+/* SQL_QUERY:
+```
+SELECT 
+    order_id,
+    user_id,
+    network_id,
+    platform,
+    order_type,
+    order_created_date,
+    created_at,
+    status,
+    tokens,
+    volume_usdt,
+    total_gas_fees_usdt,
+    tokens_spent,
+    tokens_received,
+    okto_fees_usdt,
+    order_transaction_hash,
+    network_name,
+    wallet_address,
+    input_tokens[0]['id'] as input_tokens_id,
+    output_tokens[0]['id'] as output_tokens_id,
+    order_week
+FROM prod_okto_gold_catalog.transactions.fact_orders_master
+WHERE 1 = 1
+    AND platform = 'cedefi'
+    AND status = 'SUCCESS'
+    AND order_type IN (
+        'SWAP',
+        'BRIDGE',
+        'INLINE_SWAP',
+        'INR_TO_CRYPTO_SWAP'
+    );
+
+```
+*/
+
+/* NOTES:
+1. unless mentioned otherwise please use AND platform = 'cedefi' AND status ='SUCCESS' AND order_type IN (
+        'SWAP',
+        'BRIDGE',
+        'INLINE_SWAP',
+        'INR_TO_CRYPTO_SWAP'
+    ) for considering normal trade order or swap orders
+
+for considering swap transaction please consider rder_type IN (
+        'SWAP',
+        'BRIDGE',
+        'INLINE_SWAP',
+        'INR_TO_CRYPTO_SWAP'
+    )
+for considering deposit transactions please consider order_type in ('CEFI_TO_DEFI', 'INR_TO_CRYPTO', 'EXT_TO_DEFI')
+
+very important:: always make sure order_id not in ('90ea6862-9475-480b-85dd-00b71fdf7148' when the data have the aggregation over april 2025 month or week of "2025-04-14"
+
+
+only 'prod_okto_gold_catalog.transactions.fact_orders_master' is the actual table in the databases which are used in the above query
+
+*/
+/*==== END QUERY ====*/
+
+
+
+
+/*==== QUERY: wallet created date for the web3 user_id ====*/
+/* PURPOSE:
+This query gives me the wallet created date of each user_id 
+*/
+
+/* TABLES_AND_COLUMNS:
+- user_id: is the user_id for the cedefi or web3 user
+,wallet_created_date: in the date on which the wallet was created
+,wallet_created_week: in the week on which the wallet was created
+*/
+
+/* SQL_QUERY:
+```
+WITH base_cedefi_users AS (
+    SELECT *
+    FROM prod_okto_gold_catalog.users.user_platform
+    WHERE 1 = 1
+        AND platform = 'cedefi'
+)
+
+SELECT 
+    user_id,
+    DATEADD(MINUTE, 330, created_at)::DATE AS wallet_created_date,
+    DATE_TRUNC('week', DATEADD(MINUTE, 330, created_at))::DATE AS wallet_created_week
+FROM prod_okto_silver_catalog.signing_service.user_key_table_v2
+WHERE 1 = 1
+    AND key_state IN ('ACTIVE', 'COMPLETE')
+    AND user_id IN (
+        SELECT DISTINCT user_id 
+        FROM base_cedefi_users
+    )
+QUALIFY ROW_NUMBER() OVER (
+    PARTITION BY user_id 
+    ORDER BY created_at
+) = 1;
+
+```
+*/
+
+/* NOTES:
+user_id mentioned in the query is web3 or cedefi user_id
+base_cedefi_users is not an table it is an cte so where ever your require to use base_cedefi_users then we have to use the cte mentioned in the query
+
+only 'prod_okto_gold_catalog.users.user_platform' and 'prod_okto_silver_catalog.signing_service.user_key_table_v2' are the actual table in the databases which are used in the above query, others are cte used
+
+*/
+/*==== END QUERY ====*/
+
+
+
+
+
+/*==== QUERY: first web3 and cefi first_trade ====*/
+/* PURPOSE:
+This query gives the first web3 trade date and timestamp along with the users first cefi trade date
+*/
+
+/* TABLES_AND_COLUMNS:
+- first_web3_trade_week: is the first week in which the user have made the first trade 
+first_web3_trade_at: is the IST timestamp on which the user have made the first trade
+first_cefi_trade_date: is the date on which the user_id which is web3 or cedefi user_id have made their first cefi trade
+*/
+
+/* SQL_QUERY:
+```
+WITH base_trades AS (
+    SELECT
+        user_id,
+        order_week,
+        created_at
+    FROM prod_okto_gold_catalog.transactions.fact_orders_master 
+    WHERE platform = 'cedefi'
+        AND order_type IN (
+            'SWAP',
+            'BRIDGE',
+            'INLINE_SWAP',
+            'INR_TO_CRYPTO_SWAP'
+        )
+        AND status = 'SUCCESS'
+        AND order_id NOT IN ('90ea6862-9475-480b-85dd-00b71fdf7148')
+)
+
+SELECT 
+    bt.user_id,
+    MIN(bt.order_week) AS first_web3_trade_week,
+    MIN(bt.created_at) AS first_web3_trade_at,
+    MIN(um._1st_txn_at::DATE) AS first_cefi_trade_date
+FROM base_trades AS bt
+LEFT JOIN prod_okto_gold_catalog.users.user_platform AS up 
+    ON bt.user_id = up.user_id
+LEFT JOIN prod_gold_catalog.datamart_models.users_master AS um 
+    ON up.coindcx_user_id = um.user_id
+GROUP BY 1;
+
+```
+*/
+
+/* NOTES:
+prod_okto_gold_catalog.users.user_platform table have user_id as primary key where user_id is the id for the user id web3 or cedefi where as it have a column named coindcx_user_id which is a cefi_user_id of the same cedefi or web3 user
+
+base_trades is not the actual table so when ever we want to use the base_trades cte need to be used every time it is required
+
+only 'prod_okto_gold_catalog.transactions.fact_orders_master', 'prod_okto_gold_catalog.users.user_platform' and 'prod_gold_catalog.datamart_models.users_master' are the actual table in the databases which are used in the above query, others are cte used
+
+*/
+
+
+
+/*==== END QUERY ====*/
+
+
+
+
+
+/*==== QUERY: AUM of web3 or cedefi on week on week level ====*/
+/* PURPOSE:
+Track new user acquisition and monitor signup trends over the past month.
+*/
+
+/* TABLES_AND_COLUMNS:
+- aum: is asset under management
+snapshot_date: is the date when the sampshot was taken
+
+prod_okto_gold_catalog.user_portfolio.wpnl table have every day users wallet snapshot for each user
+
+*/
+
+/* SQL_QUERY:
+```
+SELECT 
+    snapshot_date AS period,
+    SUM(eod_balance_usdt) AS aum
+FROM prod_okto_gold_catalog.user_portfolio.wpnl
+WHERE 1 = 1
+    AND user_id IN (
+        SELECT DISTINCT user_id 
+        FROM base_cedefi_users
+    )
+    AND token_id IN (
+        SELECT DISTINCT id 
+        FROM prod_okto_silver_catalog.content.tokens
+        WHERE is_published = 'true'
+    )
+    AND snapshot_date >= '2024-04-01'
+GROUP BY 1;
+
+```
+*/
+
+/* NOTES:
+prod_okto_gold_catalog.user_portfolio.wpnl table have every day users wallet snapshot for each user
+
+only 'prod_okto_gold_catalog.user_portfolio.wpnl', 'prod_okto_silver_catalog.content.tokens ' are the actual table in the databases which are used in the above query, others are cte used
+*/
+/*==== END QUERY ====*/
+
+
+
+/*==== QUERY: weekly resurrected users ====*/
+/* PURPOSE:
+This query give the weekly resurrected users, and resurrection users percentage compared to total users
+*/
+
+/* TABLES_AND_COLUMNS:
+- customers: customer_id (identifier), name (display), email (contact), signup_date (filtering)
+*/
+
+/* SQL_QUERY:
+```
+WITH base AS (
+    SELECT DISTINCT 
+        user_id,
+        order_week,
+        DENSE_RANK() OVER (
+            PARTITION BY user_id 
+            ORDER BY order_week
+        ) AS rnk
+    FROM prod_okto_gold_catalog.transactions.fact_orders_master 
+    WHERE platform = 'cedefi'
+        AND status = 'SUCCESS'
+        AND order_type IN (
+            'SWAP',
+            'BRIDGE',
+            'INLINE_SWAP',
+            'INR_TO_CRYPTO_SWAP'
+        )
+),
+
+previous_orders AS (
+    SELECT 
+        user_id,
+        order_week,
+        rnk,
+        LAG(order_week) OVER (
+            PARTITION BY user_id 
+            ORDER BY rnk
+        ) AS prev_order_week
+    FROM base
+),
+
+resurr AS (
+    SELECT 
+        user_id,
+        order_week,
+        prev_order_week,
+        CASE 
+            WHEN DATEDIFF(order_week, prev_order_week) > 7 * 4 
+                AND prev_order_week IS NOT NULL 
+            THEN 1 
+            ELSE 0 
+        END AS is_resurrected,
+        CASE 
+            WHEN prev_order_week IS NULL 
+            THEN 1 
+            ELSE 0 
+        END AS is_new
+    FROM previous_orders
+)
+
+SELECT 
+    order_week::DATE AS period,
+    SUM(is_resurrected) AS resurrected_users,
+    CONCAT(
+        ROUND((SUM(is_resurrected) / COUNT(DISTINCT user_id)) * 100, 2), 
+        '%'
+    ) AS resurrected_perc
+FROM resurr
+WHERE order_week <> DATE_TRUNC('week', NOW())
+GROUP BY order_week
+ORDER BY order_week DESC;
+```
+*/
+
+/* NOTES:
+for resurrection we concider the duration of 4 weeks which is 28 days
+
+base, previous_orders, resurr are not actual tables int the database they are the cte. and whenever they are required in the query they need to be writen separately before we call them 
+
+only 'prod_okto_gold_catalog.transactions.fact_orders_master' is the actual table in the databases which are used in the above query, others are cte used
+
+plesase make not that these are the aggregated metrics which are resurrected_users and resurrected_perc for the period
+
+*/
+/*==== END QUERY ====*/
+
+
+/*==== QUERY: web3 first time transactorn grouped based on the duration frim first first cefi trade ====*/
+
+/* PURPOSE:
+web3 first time transactorn grouped based on the duration frim first first cefi trade. 
+*/
+
+/* TABLES_AND_COLUMNS:
+- `first_time_transactor <7 days` means the users who have traded for the first time in period week but have their first cefi trade in <7 days ago
+
+`first_time_transactor 15-30 days` mean the user who have traded for the first time in the period but have made their first cefi trade before 15 days but not more than 30 days ago and so on for all the other column named
+
+*/
+
+/* SQL_QUERY:
+```
+
+WITH base_fom AS (
+    SELECT * 
+    FROM prod_okto_gold_catalog.transactions.fact_orders_master 
+    WHERE platform = 'cedefi'
+        AND order_id NOT IN ('90ea6862-9475-480b-85dd-00b71fdf7148')
+)
+
+,base_trades as
+    (select
+        user_id, order_week, created_at
+    from prod_okto_gold_catalog.transactions.fact_orders_master 
+    where platform = 'cedefi' and order_type in ('SWAP', 'BRIDGE', 'INLINE_SWAP','INR_TO_CRYPTO_SWAP') and status = 'SUCCESS'
+    and order_id not in ('90ea6862-9475-480b-85dd-00b71fdf7148')
+    )
+
+,base_first_trade_weeks as
+    (select 
+        bt.user_id,
+        min(bt.order_week) as first_web3_trade_week,
+        min(bt.created_at) as first_web3_trade_at,
+        min(um._1st_txn_at::date) as first_cefi_trade_date
+    from base_trades as bt
+    left join prod_okto_gold_catalog.users.user_platform as up on bt.user_id=up.user_id
+    left join prod_gold_catalog.datamart_models.users_master as um on up.coindcx_user_id=um.user_id
+    group by 1)
+
+
+SELECT 
+    DATE_TRUNC('week', order_created_date)::DATE AS period,
+    
+    COUNT(DISTINCT 
+        CASE 
+            WHEN DATE_TRUNC('week', order_created_date)::DATE = b.first_web3_trade_week
+                AND DATEDIFF(b.first_web3_trade_at, b.first_cefi_trade_date) <= 7
+                AND DATEDIFF(b.first_web3_trade_at, b.first_cefi_trade_date) >= 0
+            THEN b.user_id 
+        END
+    ) AS `first_time_transactor <7 days`,
+    
+    COUNT(DISTINCT 
+        CASE 
+            WHEN DATE_TRUNC('week', order_created_date)::DATE = b.first_web3_trade_week
+                AND DATEDIFF(b.first_web3_trade_at, b.first_cefi_trade_date) > 7
+                AND DATEDIFF(b.first_web3_trade_at, b.first_cefi_trade_date) <= 15
+            THEN b.user_id 
+        END
+    ) AS `first_time_transactor 7-15 days`,
+
+    COUNT(DISTINCT 
+        CASE 
+            WHEN DATE_TRUNC('week', order_created_date)::DATE = b.first_web3_trade_week
+                AND DATEDIFF(b.first_web3_trade_at, b.first_cefi_trade_date) > 15
+                AND DATEDIFF(b.first_web3_trade_at, b.first_cefi_trade_date) <= 30
+            THEN b.user_id 
+        END
+    ) AS `first_time_transactor 15-30 days`,
+
+    COUNT(DISTINCT 
+        CASE 
+            WHEN DATE_TRUNC('week', order_created_date)::DATE = b.first_web3_trade_week
+                AND DATEDIFF(b.first_web3_trade_at, b.first_cefi_trade_date) > 30
+                AND DATEDIFF(b.first_web3_trade_at, b.first_cefi_trade_date) <= 90
+            THEN b.user_id 
+        END
+    ) AS `first_time_transactor 1-3 months`,
+
+    COUNT(DISTINCT 
+        CASE 
+            WHEN DATE_TRUNC('week', order_created_date)::DATE = b.first_web3_trade_week
+                AND DATEDIFF(b.first_web3_trade_at, b.first_cefi_trade_date) > 90
+                AND DATEDIFF(b.first_web3_trade_at, b.first_cefi_trade_date) <= 180
+            THEN b.user_id 
+        END
+    ) AS `first_time_transactor 3-6 months`,
+
+    COUNT(DISTINCT 
+        CASE 
+            WHEN DATE_TRUNC('week', order_created_date)::DATE = b.first_web3_trade_week
+                AND DATEDIFF(b.first_web3_trade_at, b.first_cefi_trade_date) > 180
+            THEN b.user_id 
+        END
+    ) AS `first_time_transactor >6 months`,
+    
+    COUNT(DISTINCT 
+        CASE 
+            WHEN DATE_TRUNC('week', order_created_date)::DATE = b.first_web3_trade_week
+                AND DATEDIFF(b.first_web3_trade_at, b.first_cefi_trade_date) < 0
+            THEN b.user_id 
+        END
+    ) AS `first_trade_on_web3`,
+
+    COUNT(DISTINCT 
+        CASE 
+            WHEN DATE_TRUNC('week', order_created_date)::DATE = b.first_web3_trade_week
+                AND (b.first_cefi_trade_date IS NULL OR b.first_web3_trade_at IS NULL)
+            THEN b.user_id 
+        END
+    ) AS `no_txn_in_cefi`
+
+FROM base_fom AS a
+LEFT JOIN base_first_trade_weeks AS b 
+    ON a.user_id = b.user_id
+WHERE order_type IN (
+    'SWAP',
+    'BRIDGE',
+    'INLINE_SWAP',
+    'INR_TO_CRYPTO_SWAP'
+)
+GROUP BY 1;
+
+```
+*/
+
+/* NOTES:
+The query provided above is the period level based aggrigated for the count of cedefi or web3 users 
+
+base_fom, base_trades, base_first_trade_weeks are not the actual tables in the databases, so when ever these are required we need to write the complete cte before using them 
+
+only 'prod_okto_gold_catalog.transactions.fact_orders_master', 'prod_gold_catalog.datamart_models.users_master ' and 'prod_okto_gold_catalog.users.user_platform' are the actual table in the databases which are used in the above query, others are cte used
+
+please make note that the metrics from the query are the aggregated metrics on the period 
+*/
+/*==== END QUERY ====*/
+
+
+/*==== QUERY: weekly volume percentile wise volumes, number of user, and number of order from those volume percentile users  ====*/
+
+/* PURPOSE:
+the query give the volume, number if users, number of orders contributed by specific volume percentile group users of the period week
+*/
+
+/* TABLES_AND_COLUMNS:
+- top_1_ptile_volume: is the volume contributed buy the users who are in top 1 percentile of that period weeks volume
+top_1_ptile_orders: is the number of orders contributed buy the users who are in top 1 percentile of that period weeks volume
+top_1_ptile_users: is the count of users who were in the top 1 percentile by volume of the period month
+
+similarly 2_to_5_ptile_users is the number of user who were in the top 2 to 5 percentile range by volume
+*/
+
+/* SQL_QUERY:
+```
+WITH vol_ptile_base_fom AS (
+    SELECT
+        order_week AS period,
+        user_id, 
+        COUNT(DISTINCT order_id) AS orders,
+        SUM(volume_usdt) AS trade_volume,
+        ROUND(
+            CEILING(
+                PERCENT_RANK() OVER (
+                    PARTITION BY order_week 
+                    ORDER BY SUM(volume_usdt)
+                ) * 100
+            ), 
+            0
+        ) AS vol_percentile
+    FROM prod_okto_gold_catalog.transactions.fact_orders_master 
+    WHERE 1 = 1
+        AND platform = 'cedefi'
+        AND status = 'SUCCESS'
+        AND order_type IN (
+            'SWAP',
+            'BRIDGE',
+            'INLINE_SWAP',
+            'INR_TO_CRYPTO_SWAP'
+        )
+        AND order_id NOT IN ('90ea6862-9475-480b-85dd-00b71fdf7148')
+    GROUP BY ALL
+)
+
+SELECT 
+    period,
+
+    SUM(CASE WHEN vol_percentile >= 100 THEN trade_volume ELSE 0 END) AS top_1_ptile_volume,
+    SUM(CASE WHEN vol_percentile >= 100 THEN orders ELSE 0 END) AS top_1_ptile_orders,
+    COUNT(DISTINCT CASE WHEN vol_percentile >= 100 THEN user_id ELSE NULL END) AS top_1_ptile_users,
+    
+    SUM(CASE WHEN vol_percentile >= 96 AND vol_percentile <= 99 THEN trade_volume ELSE 0 END) AS 2_to_5_ptile_volume,
+    SUM(CASE WHEN vol_percentile >= 96 AND vol_percentile <= 99 THEN orders ELSE 0 END) AS 2_to_5_ptile_orders,
+    COUNT(DISTINCT CASE WHEN vol_percentile >= 96 AND vol_percentile <= 99 THEN user_id ELSE NULL END) AS 2_to_5_ptile_users,
+
+    SUM(CASE WHEN vol_percentile >= 91 AND vol_percentile <= 95 THEN trade_volume ELSE 0 END) AS 6_to_10_ptile_volume,
+    SUM(CASE WHEN vol_percentile >= 91 AND vol_percentile <= 95 THEN orders ELSE 0 END) AS 6_to_10_ptile_orders,
+    COUNT(DISTINCT CASE WHEN vol_percentile >= 91 AND vol_percentile <= 95 THEN user_id ELSE NULL END) AS 6_to_10_ptile_users,
+
+    SUM(CASE WHEN vol_percentile <= 90 THEN trade_volume ELSE 0 END) AS 10_plus_ptile_volume,
+    SUM(CASE WHEN vol_percentile <= 90 THEN orders ELSE 0 END) AS 10_plus_ptile_orders,
+    COUNT(DISTINCT CASE WHEN vol_percentile <= 90 THEN user_id ELSE NULL END) AS 10_plus_ptile_users
+
+FROM vol_ptile_base_fom AS a
+WHERE period <> DATE_TRUNC('week', NOW())::DATE
+GROUP BY 1
+ORDER BY period DESC;
+```
+*/
+
+/* NOTES:
+this in the method "SELECT
+        order_week AS period,
+        user_id, 
+        COUNT(DISTINCT order_id) AS orders,
+        SUM(volume_usdt) AS trade_volume,
+        ROUND(
+            CEILING(
+                PERCENT_RANK() OVER (
+                    PARTITION BY order_week 
+                    ORDER BY SUM(volume_usdt)
+                ) * 100
+            ), 
+            0
+        ) AS vol_percentile
+    FROM prod_okto_gold_catalog.transactions.fact_orders_master 
+    WHERE 1 = 1
+        AND platform = 'cedefi'
+        AND status = 'SUCCESS'
+        AND order_type IN (
+            'SWAP',
+            'BRIDGE',
+            'INLINE_SWAP',
+            'INR_TO_CRYPTO_SWAP'
+        )
+        AND order_id NOT IN ('90ea6862-9475-480b-85dd-00b71fdf7148')
+    GROUP BY ALL"
+
+generally used to assign the period level volume percentiles to the trading users in web3 or cedefi
+
+
+vol_ptile_base_fom is not a table in dataframe those are just a cte, so when ever we require them then we need to write the complete cte before using them 
+
+only 'prod_okto_gold_catalog.transactions.fact_orders_master' is the actual table in the databases which are used in the above query, others are cte used
+
+please make note that the metrics from the query are the aggregated metrics on the period. please utiles the concept used in the query only
+*/
+/*==== END QUERY ====*/
+
+
+
+/*==== QUERY: CeFi spot volume, revenue and weekly transacting users ====*/
+/* PURPOSE:
+This query gets the weekly cefi_spot_wtu which is cefi spot weekly transacting users, cefi_spot_volume_non_api which is cefi spot volume of non api trades only
+you can also get the cefi spot non api revenue using the query.
+*/
+
+/* TABLES_AND_COLUMNS:
+- user_id used in the the table "prod_gold_catalog.datamart_models.lake_trades" is cefi user id  or coindcx_user_id and NOT the cedefi or web3 user_id please make note of this
+- DATE_TRUNC('week', trade_date)::date is the date of trade in the table
+- trade_volume * usdt_conversion is the method to calculate the trade volume for the trade order
+- calculated_fee_amount * usdt_conversion is the method to calculate the trade revenue for trade order
+- order_id in the unique identifier for each trade in "prod_gold_catalog.datamart_models.lake_trades" table
+- LOWER(product) IN ('spot', 'insta') is used to get the 'SPOT' order 
+and 'futures' is used to get the FUTURES orders
+*/
+
+/* SQL_QUERY:
+```sql
+WITH base_cefi AS (
+    SELECT 
+        user_id, 
+        DATE_TRUNC('week', trade_date)::date AS trade_week,
+        SUM(trade_volume * usdt_conversion) AS trade_volume,
+        SUM(calculated_fee_amount * usdt_conversion) AS trade_revenue
+    FROM 
+        prod_gold_catalog.datamart_models.lake_trades
+    WHERE 
+        LOWER(product) IN ('spot', 'insta')
+        AND trade_date >= DATE('2025-01-01')
+        AND source <> 'api'
+    GROUP BY 
+        user_id, 
+        DATE_TRUNC('week', trade_date)::date
+),
+
+cefi_wtu_volume AS (
+    SELECT 
+        trade_week AS week,
+        COUNT(DISTINCT user_id) AS cefi_spot_wtu,
+        SUM(trade_volume) AS cefi_spot_volume_non_api
+    FROM 
+        base_cefi
+    GROUP BY 
+        trade_week
+    ORDER BY 
+        week DESC
+)
+
+SELECT * FROM cefi_wtu_volume;
+```
+*/
+
+/* NOTES:
+- user_id used in the the table "prod_gold_catalog.datamart_models.lake_trades" is cefi user id or coindcx_user_id and NOT the cedefi or web3 user_id please make note of this
+- DATE_TRUNC('week', trade_date)::date is the date of trade in the table
+- trade_volume * usdt_conversion is the method to calculate the trade volume for the trade order
+- calculated_fee_amount * usdt_conversion is the method to calculate the trade revenue for trade order
+- order_id in the unique identifier for each trade in "prod_gold_catalog.datamart_models.lake_trades" table
+- LOWER(product) IN ('spot', 'insta') is used to get the 'SPOT' order 
+and 'futures' is used to get the FUTURES orders
+- base_cefi and cefi_wtu_volume are the cte used in the query and not the real tables. "prod_gold_catalog.datamart_models.lake_trades" is only the real table used in the cte 
+- please note that the base_cefi cte are agregated on user_id, where user_id is CeFi user_id and not CeDeFi user_id or web3 user_id. so make user we use the table "prod_gold_catalog.datamart_models.lake_trades" properly incase of non aggregated usage
+- please note that cefi_wtu_volume cte is aggretated on week an not the actual data
+*/
+/*==== END QUERY ====*/
+
+
+
+/*==== QUERY: CeFi Signup users or coindcx signup users and CeFi naps or coindcx naps ====*/
+/* PURPOSE:
+This query give us the aggregated user count of CeFi signup users and CeFi NAPs (Newly acquired portfolios) at weekly level
+*/
+
+/* TABLES_AND_COLUMNS:
+- the query only users one real table which is "prod_gold_catalog.datamart_models.users_master" whereas cefi_signup_nap, all_weeks and cefi_signup_nap_final are the cte derived
+
+- user_id used in the table "prod_gold_catalog.datamart_models.users_master" is cefi user_id or coindcx_user_id and not cedefi_user_id or web3 user_id 
+
+- DATE_TRUNC('week', rails_users_created_date)::date is the cefi_signup_date for the user_id 
+- DATE_TRUNC('week', _1st_txn_at)::date is the date on which the user have made their first transaction on the cefi platform _1st_futures_txn_date
+- DATE_TRUNC('week', _1st_futures_txn_date)::date is the date on which the user have made their first futures transaction on the cefi platform or coindcx platform
+
+*/
+
+/* SQL_QUERY:
+```
+
+WITH cefi_signup_nap AS (
+    SELECT 
+        user_id AS coindcx_user_id,
+        DATE_TRUNC('week', rails_users_created_date)::date AS cefi_signup_date,
+        DATE_TRUNC('week', _1st_txn_at)::date AS cefi_first_txn_date
+    FROM 
+        prod_gold_catalog.datamart_models.users_master
+),
+
+all_weeks AS (
+    SELECT 
+        cefi_signup_date AS week
+    FROM 
+        cefi_signup_nap
+    WHERE 
+        cefi_signup_date IS NOT NULL
+
+    UNION
+
+    SELECT 
+        cefi_first_txn_date AS week
+    FROM 
+        cefi_signup_nap
+    WHERE 
+        cefi_first_txn_date IS NOT NULL
+),
+
+cefi_signup_nap_final AS (
+    SELECT
+        week,
+        COUNT(DISTINCT CASE WHEN cefi_signup_date = week THEN coindcx_user_id END) AS cefi_signup_users,
+        COUNT(DISTINCT CASE WHEN cefi_first_txn_date = week THEN coindcx_user_id END) AS cefi_naps
+    FROM 
+        all_weeks
+    LEFT JOIN 
+        cefi_signup_nap 
+        ON cefi_signup_nap.cefi_signup_date = all_weeks.week 
+        OR cefi_signup_nap.cefi_first_txn_date = all_weeks.week
+    GROUP BY 
+        week
+    ORDER BY 
+        week DESC
+)
+
+-- Final output
+SELECT * FROM cefi_signup_nap_final;
+
+```
+*/
+
+/* NOTES:
+- the query only users one real table which is "prod_gold_catalog.datamart_models.users_master" whereas cefi_signup_nap, all_weeks and cefi_signup_nap_final are the cte derived
+
+- please make not cefi_signup_nap_final is a cte with metrics aggregated on weekly level. to get the user level metrics we need to query on the table "prod_gold_catalog.datamart_models.users_master" directly to get required cte
+*/
+/*==== END QUERY ====*/
+
+
+/*==== QUERY: coindcx users pii or coindcx users personal information ====*/
+/* PURPOSE:
+The query gives the personal information about the coindcx user id
+*/
+
+/* TABLES_AND_COLUMNS:
+- in the table "prod_silver_catalog.rails.users"
+- id is the coindcx_user_id or cefi user_id
+- email, first_name, last_name, phone_number are the personal information about the user
+- to get the personal information using cedefi_user_id or web3 user_id you can join it as u.id=p.coindcx_user_id where u is prod_silver_catalog.rails.users and p. is (select * from prod_okto_gold_catalog.users.user_platform where platform = 'cedefi')
+*/
+
+/* SQL_QUERY:
+```
+select u.id as coindcx_user_id,p.user_id as cedefi_user_id, u.email, u.first_name, u.last_name, u.phone_number 
+from prod_silver_catalog.rails.users as u
+left join (select * from prod_okto_gold_catalog.users.user_platform where platform = 'cedefi') as p on u.id=p.coindcx_user_id
+```
+*/
+
+/* NOTES:
+please make note that to get the personal information using cedefi_user_id or web3 user_id you can join it as u.id=p.coindcx_user_id where u is prod_silver_catalog.rails.users and p. is (select * from prod_okto_gold_catalog.users.user_platform where platform = 'cedefi')
+*/
+/*==== END QUERY ====*/
+
+
+
+/*==== QUERY: Period on period retention and other metrics ====*/
+/* PURPOSE:
+The query is the method to get the period on period retention metrics using "prod_okto_gold_catalog.transactions.fact_orders_master"  and creating multiple cte
+*/
+
+/* TABLES_AND_COLUMNS:
+- This table primarily users the table "prod_okto_gold_catalog.transactions.fact_orders_master" to create multiple cte
+
+- the final output of the query will have the following columns
+
+cohort_period: the period
+next_period
+period_number: period difference form base period
+retained_count: retained count of users from base cohort 
+cohort_count: count of users in base cohort in base month
+retention_rate: retention rate
+total_vol_sum
+total_order_count
+avpu : average volume per user
+aov: average order Value
+atpu: average transactions per user
+period_volume: total volume of the base period
+volume_pct
+*/
+
+/* SQL_QUERY:
+```sql
+WITH first_trade_period AS (
+    SELECT
+        user_id,
+        DATE_TRUNC('month', MIN(order_created_date)) AS first_trade_period
+    FROM 
+        prod_okto_gold_catalog.transactions.fact_orders_master
+    WHERE 
+        platform = 'cedefi'
+        AND status = 'SUCCESS'
+        AND order_type IN ('SWAP', 'BRIDGE', 'INLINE_SWAP','INR_TO_CRYPTO_SWAP')
+    GROUP BY 
+        user_id
+),
+
+base AS (
+    SELECT
+        DATE_TRUNC('month', order_created_date) AS period,
+        user_id, 
+        COUNT(DISTINCT order_id) AS orders,
+        SUM(volume_usdt) AS trade_volume,
+        ROUND(CEILING(PERCENT_RANK() OVER (
+            PARTITION BY DATE_TRUNC('month', order_created_date) 
+            ORDER BY SUM(volume_usdt)
+        ) * 100), 0) AS vol_percentile
+    FROM 
+        prod_okto_gold_catalog.transactions.fact_orders_master 
+    WHERE 
+        platform = 'cedefi'
+        AND status = 'SUCCESS'
+        AND order_type IN ('SWAP', 'BRIDGE', 'INLINE_SWAP','INR_TO_CRYPTO_SWAP')    GROUP BY 
+        DATE_TRUNC('month', order_created_date),
+        user_id
+),
+
+filtered_base AS (
+    SELECT 
+        b.period, 
+        b.user_id
+    FROM 
+        base b
+    JOIN 
+        first_trade_period ftp 
+        ON b.user_id = ftp.user_id 
+        AND b.period = ftp.first_trade_period
+    -- Optionally filter for b.user_id or vol_percentile here
+),
+
+period_x_volume AS (
+    SELECT
+        DATE_TRUNC('month', order_created_date) AS order_period,
+        user_id,
+        SUM(volume_usdt) AS vol_sum,
+        COUNT(DISTINCT order_id) AS order_count
+    FROM 
+        prod_okto_gold_catalog.transactions.fact_orders_master 
+    WHERE 
+        platform = 'cedefi'
+        AND status = 'SUCCESS'
+        AND order_type IN ('SWAP', 'BRIDGE', 'INLINE_SWAP','INR_TO_CRYPTO_SWAP')
+    GROUP BY 
+        DATE_TRUNC('month', order_created_date),
+        user_id
+),
+
+filtered_traders AS (
+    SELECT 
+        t.period AS cohort_period, 
+        t.user_id, 
+        w.order_period, 
+        w.vol_sum, 
+        w.order_count
+    FROM 
+        filtered_base AS t 
+    LEFT JOIN 
+        period_x_volume AS w 
+        ON t.user_id = w.user_id
+    WHERE 
+        t.period >= '2024-07-01'
+        AND t.period < DATE_TRUNC('month', NOW()::date)
+),
+
+retention AS (
+    SELECT 
+        cohort_period,
+        user_id,
+        order_period AS next_period,
+        vol_sum,
+        order_count
+    FROM 
+        filtered_traders
+    WHERE 
+        order_period >= cohort_period
+),
+
+cohort_size AS (
+    SELECT 
+        cohort_period,
+        COUNT(DISTINCT user_id) AS cohort_count
+    FROM 
+        filtered_traders
+    GROUP BY 
+        cohort_period
+),
+
+retained_users AS (
+    SELECT 
+        cohort_period,
+        next_period,
+        COUNT(DISTINCT user_id) AS retained_count,
+        SUM(vol_sum) AS total_vol_sum,
+        SUM(order_count) AS total_order_count
+    FROM 
+        retention
+    GROUP BY 
+        cohort_period, 
+        next_period
+),
+
+retn_output AS (
+    SELECT 
+        r.cohort_period::date,
+        r.next_period::date,
+        DATEDIFF(month, r.cohort_period, r.next_period) AS period_number,
+        r.retained_count,
+        c.cohort_count,
+        ROUND((r.retained_count * 1.0 / c.cohort_count), 4) AS retention_rate,
+        r.total_vol_sum,
+        r.total_order_count,
+        ROUND((r.total_vol_sum * 1.0 / r.retained_count), 0) AS avpu,
+        ROUND((r.total_vol_sum * 1.0 / r.total_order_count), 0) AS aov,
+        ROUND((r.total_order_count * 1.0 / r.retained_count), 0) AS atpu
+    FROM 
+        retained_users r
+    JOIN 
+        cohort_size c
+        ON r.cohort_period = c.cohort_period
+    WHERE 
+        r.next_period >= '2024-07-01'
+        AND r.next_period < DATE_TRUNC('month', NOW()::date)
+    ORDER BY 
+        r.cohort_period::date DESC, 
+        r.next_period::date
+),
+
+wow_volumes AS (
+    SELECT 
+        DATE_TRUNC('month', order_created_date) AS order_period, 
+        SUM(volume_usdt) AS period_volume 
+    FROM 
+        prod_okto_gold_catalog.transactions.fact_orders_master 
+    WHERE 
+        platform = 'cedefi' 
+        AND status = 'SUCCESS' 
+        AND order_type IN ('SWAP', 'BRIDGE', 'INLINE_SWAP','INR_TO_CRYPTO_SWAP')
+    GROUP BY 
+        DATE_TRUNC('month', order_created_date)
+)
+
+SELECT 
+    ro.*, 
+    wow.period_volume, 
+    ROUND((total_vol_sum / period_volume), 4) AS volume_pct 
+FROM 
+    retn_output AS ro
+LEFT JOIN 
+    wow_volumes AS wow 
+    ON ro.next_period = wow.order_period
+ORDER BY 
+    ro.cohort_period::date DESC, 
+    ro.next_period::date;
+
+```
+*/
+
+/* NOTES:
+DATE_TRUNC('week', order_created_date) instead of DATE_TRUNC('month', order_created_date) to get the week on week retention metrics 
+
+please not this is the method to get the retention metrics for a specific period level
+
+- any additional user level filter can be added to 'filtered_base' cte. like considering specific cohort of users
+*/
+/*==== END QUERY ====*/
