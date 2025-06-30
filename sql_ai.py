@@ -466,7 +466,8 @@ class SQLGenerator:
 
 def main():
     """Main function to test the SQL Generator."""
-    api_key = os.getenv("OPENAI_API_KEY")
+    # api_key = os.getenv("OPENAI_API_KEY")
+    api_key = st.secrets['OPENAI_API_KEY']
     print(f"API key from environment: {'Found' if api_key else 'Not found'}")
     
     if not api_key:
