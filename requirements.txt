@@ -4,4 +4,4 @@ openai==1.55.3
 python-dotenv==1.0.0
 tiktoken==0.9.0
 faiss-cpu==1.11.0
-# All other imports are from the Python standard library and do not require installation re
+# All other imports are from the Python standard library and do not require installation readd

@@ -935,7 +935,7 @@ retn_output AS (
         r.next_period::date
 ),
 
-wow_volumes AS (
+pop_volumes AS (
     SELECT 
         DATE_TRUNC('month', order_created_date) AS order_period, 
         SUM(volume_usdt) AS period_volume 
@@ -956,7 +956,7 @@ SELECT
 FROM 
     retn_output AS ro
 LEFT JOIN 
-    wow_volumes AS wow 
+    pop_volumes AS wow 
     ON ro.next_period = wow.order_period
 ORDER BY 
     ro.cohort_period::date DESC, 
