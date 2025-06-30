@@ -1,0 +1,23 @@
+[
+  [
+    {
+      "role": "user",
+      "content": "what was the total volume yesterday "
+    },
+    {
+      "role": "assistant",
+      "content": "SELECT\n    SUM(volume_usdt) AS total_volume\nFROM prod_okto_gold_catalog.transactions.fact_orders_master\nWHERE platform = 'cedefi'\n    AND status = 'SUCCESS'\n    AND order_type IN ('SWAP', 'BRIDGE', 'INLINE_SWAP', 'INR_TO_CRYPTO_SWAP')\n    AND order_id != '90ea6862-9475-480b-85dd-00b71fdf7148'\n    AND DATE(order_date) = CURRENT_DATE - INTERVAL 1 DAY;"
+    }
+  ],
+
+  [
+    {
+      "role": "user",
+      "content": "what were the top traded tokens yesterday"
+    },
+    {
+      "role": "assistant",
+      "content": "SELECT \n    input_tokens_id,\n    output_tokens_id,\n    COUNT(*) AS total_trades,\n    SUM(volume_usdt) AS total_volume_usdt\nFROM prod_okto_gold_catalog.transactions.fact_orders_master\nWHERE 1 = 1\n    AND platform = 'cedefi'\n    AND status = 'SUCCESS'\n    AND order_type IN ('SWAP', 'BRIDGE', 'INLINE_SWAP', 'INR_TO_CRYPTO_SWAP')\n    AND order_created_date = CURRENT_DATE - INTERVAL 1 DAY\nGROUP BY input_tokens_id, output_tokens_id\nORDER BY total_trades DESC, total_volume_usdt DESC\nLIMIT 10;"
+    }
+  ]
+]
