@@ -75,6 +75,21 @@ def get_last_n_sessions(n=10):
     history = load_chat_history()
     return history[-n:]
 
+def conversation_tuples_to_session(conversation_history):
+    """
+    Convert a list of (user_msg, ai_response) tuples to a session list of dicts.
+    Handles ai_response as dict or string.
+    """
+    session = []
+    for user_msg, ai_response in conversation_history:
+        session.append({"role": "user", "content": user_msg})
+        if isinstance(ai_response, dict):
+            # Store the whole dict as content for richer history
+            session.append({"role": "assistant", "content": ai_response})
+        else:
+            session.append({"role": "assistant", "content": ai_response})
+    return session
+
 class SQLGenerator:
     def __init__(self, openai_api_key=None, context_file_path=None):
         """Initialize the SQL Generator with OpenAI API key."""

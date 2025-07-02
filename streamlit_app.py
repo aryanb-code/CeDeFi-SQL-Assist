@@ -1,7 +1,7 @@
 import streamlit as st
 import os
 import sys
-from sql_ai import SQLGenerator, DEFAULT_CONTEXT_FILE, get_last_n_sessions, add_session_to_history
+from sql_ai import SQLGenerator, DEFAULT_CONTEXT_FILE, get_last_n_sessions, add_session_to_history, conversation_tuples_to_session
 from dotenv import load_dotenv
 
 # Get the directory where this file is located
@@ -106,7 +106,6 @@ def main():
         
         # Conversation management
         st.header("🗑️ Conversation")
-        
         # Clear conversation
         if st.button("🗑️ Clear Conversation", type="secondary"):
             st.session_state.messages = []
@@ -180,7 +179,7 @@ def main():
                     st.session_state.messages.append({"role": "assistant", "content": response})
                     
                     # Auto-save conversation after each complete exchange (2 messages: user + assistant)
-                    if len(st.session_state.messages) >= 2 and not st.session_state.conversation_saved:
+                    if len(st.session_state.messages) >= 2:
                         add_session_to_history(st.session_state.messages)
                         st.session_state.conversation_saved = True
                     
@@ -191,7 +190,7 @@ def main():
                     st.session_state.messages.append({"role": "assistant", "content": error_message})
                     
                     # Auto-save conversation even if there's an error
-                    if len(st.session_state.messages) >= 2 and not st.session_state.conversation_saved:
+                    if len(st.session_state.messages) >= 2:
                         add_session_to_history(st.session_state.messages)
                         st.session_state.conversation_saved = True
                     
