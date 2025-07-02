@@ -184,9 +184,7 @@ class SQLGenerator:
         
         Provide only the SQL query without explanation, comments, or additional text.
 
-        please follow the following rules:  
-        1. It is not allowed to use window functions inside WHERE clause.
-        2. It is not allowed to use window functions inside HAVING clause.
+        you cannot use window functions inside WHERE clause, HAVING clause, or ORDER BY clause.
         """
         
         if filtered_context == "":
@@ -197,8 +195,7 @@ class SQLGenerator:
             
             Provide only the SQL query without explanation, comments, or additional text.
             
-            please keep in mind 
-            1. It is not allowed to use window functions inside WHERE clause.
+            you cannot use window functions inside WHERE clause, HAVING clause, or ORDER BY clause.
             """
             
         prompt_template = PromptTemplate(
@@ -250,6 +247,8 @@ class SQLGenerator:
             Return a JSON with these fields:
             1. sql_query: The SQL query to solve the problem
             2. explanation: Step-by-step explanation of what the query does
+
+            you cannot use window functions inside WHERE clause, HAVING clause, or ORDER BY clause.
             """
             
         prompt_template = PromptTemplate(
@@ -315,10 +314,7 @@ class SQLGenerator:
         If the user is asking to modify or fix a previous query, make the necessary changes.
         If this is a new request, generate a fresh query.
 
-        please follow the following rules:  
-        1. It is not allowed to use window functions inside WHERE clause.
-        2. It is not allowed to use window functions inside HAVING clause.
-        
+        you cannot use window functions inside WHERE clause, HAVING clause, or ORDER BY clause.
         Return a JSON with these fields:
         1. sql_query: The SQL query to solve the problem
         2. explanation: Step-by-step explanation of what the query does
@@ -337,14 +333,13 @@ class SQLGenerator:
             If the user is asking to modify or fix a previous query, make the necessary changes.
             If this is a new request, generate a fresh query.
 
-            please follow the following rules:  
-            1. It is not allowed to use window functions inside WHERE clause.
-            2. It is not allowed to use window functions inside HAVING clause.
-            
+  
             Return a JSON with these fields:
             1. sql_query: The SQL query to solve the problem
             2. explanation: Step-by-step explanation of what the query does
             3. is_modification: true if this modifies a previous query, false if it's a new query
+
+            you cannot use window functions inside WHERE clause, HAVING clause, or ORDER BY clause.
             """
         
         prompt_template = PromptTemplate(
@@ -443,12 +438,10 @@ class SQLGenerator:
         Based on the conversation history and current request, generate an appropriate SQL query. 
         If the user is asking to modify or fix a previous query, make the necessary changes.
         If this is a new request, generate a fresh query.
-
-        please follow the following rules:  
-        1. It is not allowed to use window functions inside WHERE clause.
-        2. It is not allowed to use window functions inside HAVING clause.
         
         Provide ONLY the SQL query without any JSON formatting, comments, or additional text.
+
+        you cannot use window functions inside WHERE clause, HAVING clause, or ORDER BY clause.
         """
         
         if filtered_context == "":
@@ -463,11 +456,9 @@ class SQLGenerator:
             If the user is asking to modify or fix a previous query, make the necessary changes.
             If this is a new request, generate a fresh query.
 
-            please follow the following rules:  
-            1. It is not allowed to use window functions inside WHERE clause.
-            2. It is not allowed to use window functions inside HAVING clause.
-            
             Provide ONLY the SQL query without any JSON formatting, comments, or additional text.
+
+            you cannot use window functions inside WHERE clause, HAVING clause, or ORDER BY clause.
             """
         
         prompt_template = PromptTemplate(
