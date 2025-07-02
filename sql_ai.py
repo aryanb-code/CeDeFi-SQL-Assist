@@ -39,22 +39,27 @@ def save_chat_history(history):
 
 def add_session_to_history(session):
     """
-    Add a conversation (list of message dicts) to history if it's not a duplicate of the last one.
-    Each session is a list of dicts: {"role": ..., "content": ...}
+    Add a conversation (list of message dicts) to history.
+    If the new session is a continuation of the last, replace it.
     Only saves legitimate conversations with proper format.
     """
-    # Validate that this is a legitimate session
     if not is_legitimate_session(session):
         print("Warning: Skipping invalid session format")
         return
-    
+
     history = load_chat_history()
-    # Only save if different from the last saved conversation
-    if not history or history[-1] != session:
+    if history:
+        last = history[-1]
+        # If the new session is a continuation of the last, replace it
+        if len(session) > len(last) and session[:len(last)] == last:
+            history[-1] = session
+        elif last != session:
+            history.append(session)
+    else:
         history.append(session)
-        # Keep only the last 10 sessions
-        history = history[-10:]
-        save_chat_history(history)
+    # Keep only the last 10 sessions
+    history = history[-10:]
+    save_chat_history(history)
 
 def is_legitimate_session(session):
     """
@@ -179,7 +184,7 @@ class SQLGenerator:
         
         Provide only the SQL query without explanation, comments, or additional text.
 
-        please keep in mind 
+        please follow the following rules:  
         1. It is not allowed to use window functions inside WHERE clause.
         2. It is not allowed to use window functions inside HAVING clause.
         """
@@ -310,7 +315,7 @@ class SQLGenerator:
         If the user is asking to modify or fix a previous query, make the necessary changes.
         If this is a new request, generate a fresh query.
 
-        please keep in mind 
+        please follow the following rules:  
         1. It is not allowed to use window functions inside WHERE clause.
         2. It is not allowed to use window functions inside HAVING clause.
         
@@ -332,7 +337,7 @@ class SQLGenerator:
             If the user is asking to modify or fix a previous query, make the necessary changes.
             If this is a new request, generate a fresh query.
 
-            please keep in mind 
+            please follow the following rules:  
             1. It is not allowed to use window functions inside WHERE clause.
             2. It is not allowed to use window functions inside HAVING clause.
             
@@ -439,7 +444,7 @@ class SQLGenerator:
         If the user is asking to modify or fix a previous query, make the necessary changes.
         If this is a new request, generate a fresh query.
 
-        please keep in mind 
+        please follow the following rules:  
         1. It is not allowed to use window functions inside WHERE clause.
         2. It is not allowed to use window functions inside HAVING clause.
         
@@ -458,7 +463,7 @@ class SQLGenerator:
             If the user is asking to modify or fix a previous query, make the necessary changes.
             If this is a new request, generate a fresh query.
 
-            please keep in mind 
+            please follow the following rules:  
             1. It is not allowed to use window functions inside WHERE clause.
             2. It is not allowed to use window functions inside HAVING clause.
             
