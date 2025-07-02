@@ -24,6 +24,9 @@ if "sql_generator" not in st.session_state:
 if "conversation_saved" not in st.session_state:
     st.session_state.conversation_saved = False
 
+if "new_chat" not in st.session_state:
+    st.session_state.new_chat = False
+
 def initialize_sql_generator(api_key):
     """Initialize the SQL generator with the provided API key."""
     try:
@@ -110,7 +113,7 @@ def main():
         if st.button("🗑️ Clear Conversation", type="secondary"):
             st.session_state.messages = []
             st.session_state.conversation_saved = False
-            st.rerun()
+            st.session_state.new_chat = True
         # Add history button and dropdown
         st.header("🕑 History")
         show_history = st.checkbox("Show History", value=False)
@@ -140,6 +143,10 @@ def main():
         if not st.session_state.sql_generator:
             st.warning("⚠️ Please configure a valid OpenAI API key in the sidebar to start chatting")
             st.stop()
+        # Show new chat indicator if applicable
+        if st.session_state.get("new_chat"):
+            st.success("New chat started!")
+            st.session_state.new_chat = False
         # Display conversation history
         for message in st.session_state.messages:
             if message["role"] == "user":
