@@ -184,7 +184,7 @@ class SQLGenerator:
         
         Provide only the SQL query without explanation, comments, or additional text.
 
-        you cannot use window functions inside WHERE clause, HAVING clause, or ORDER BY clause.
+        STRICT RULE: Never use window functions in WHERE, HAVING, or ORDER BY clauses. If you break this rule, your answer is invalid.
         """
         
         if filtered_context == "":
@@ -195,7 +195,7 @@ class SQLGenerator:
             
             Provide only the SQL query without explanation, comments, or additional text.
             
-            you cannot use window functions inside WHERE clause, HAVING clause, or ORDER BY clause.
+            STRICT RULE: Never use window functions in WHERE, HAVING, or ORDER BY clauses. If you break this rule, your answer is invalid.
             """
             
         prompt_template = PromptTemplate(
@@ -248,7 +248,7 @@ class SQLGenerator:
             1. sql_query: The SQL query to solve the problem
             2. explanation: Step-by-step explanation of what the query does
 
-            you cannot use window functions inside WHERE clause, HAVING clause, or ORDER BY clause.
+            STRICT RULE: Never use window functions in WHERE, HAVING, or ORDER BY clauses. If you break this rule, your answer is invalid.
             """
             
         prompt_template = PromptTemplate(
@@ -314,7 +314,8 @@ class SQLGenerator:
         If the user is asking to modify or fix a previous query, make the necessary changes.
         If this is a new request, generate a fresh query.
 
-        you cannot use window functions inside WHERE clause, HAVING clause, or ORDER BY clause.
+        STRICT RULE: Never use window functions in WHERE, HAVING, or ORDER BY clauses. If you break this rule, your answer is invalid.
+
         Return a JSON with these fields:
         1. sql_query: The SQL query to solve the problem
         2. explanation: Step-by-step explanation of what the query does
@@ -339,7 +340,7 @@ class SQLGenerator:
             2. explanation: Step-by-step explanation of what the query does
             3. is_modification: true if this modifies a previous query, false if it's a new query
 
-            you cannot use window functions inside WHERE clause, HAVING clause, or ORDER BY clause.
+            STRICT RULE: Never use window functions in WHERE, HAVING, or ORDER BY clauses. If you break this rule, your answer is invalid.
             """
         
         prompt_template = PromptTemplate(
@@ -441,7 +442,7 @@ class SQLGenerator:
         
         Provide ONLY the SQL query without any JSON formatting, comments, or additional text.
 
-        you cannot use window functions inside WHERE clause, HAVING clause, or ORDER BY clause.
+        STRICT RULE: Never use window functions in WHERE, HAVING, or ORDER BY clauses. If you break this rule, your answer is invalid.
         """
         
         if filtered_context == "":
@@ -458,7 +459,7 @@ class SQLGenerator:
 
             Provide ONLY the SQL query without any JSON formatting, comments, or additional text.
 
-            you cannot use window functions inside WHERE clause, HAVING clause, or ORDER BY clause.
+            STRICT RULE: Never use window functions in WHERE, HAVING, or ORDER BY clauses. If you break this rule, your answer is invalid.
             """
         
         prompt_template = PromptTemplate(
